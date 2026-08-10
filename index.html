@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petualangan Kelelawar Malam</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+        .game-container {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 4px solid #444;
+            border-radius: 10px;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            text-align: center;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            color: #ffcc00;
+        }
+        p {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #ddd;
+        }
+        .btn {
+            pointer-events: auto;
+            background: #ffcc00;
+            color: #111;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 15px rgba(255,204,0,0.4);
+        }
+        .btn:hover {
+            background: #ffdb4d;
+            transform: scale(1.05);
+        }
+        .hidden {
+            display: none !important;
+        }
+        .score-board {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 40px;
+            font-weight: bold;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div class="score-board" id="scoreBoard">0</div>
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        
+        <div class="ui-layer" id="startScreen">
+            <h1>🦇 Kelelawar Malam</h1>
+            <p>Tekan Spasi, Klik, atau Tap layar<br>untuk menerbangkan kelelawar!</p>
+            <button class="btn" id="startBtn">Mulai Bermain</button>
+        </div>
+
+        <div class="ui-layer hidden" id="gameOverScreen">
+            <h1>Game Over!</h1>
+            <p>Skor Anda: <span id="finalScore">0</span></p>
+            <button class="btn" id="restartBtn">Main Lagi</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const finalScore = document.getElementById('finalScore');
+
+        // Status Game
+        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let score = 0;
+        let frames = 0;
+
+        // Properti Kelelawar
+        const bat = {
+            x: 80,
+            y: 250,
+            radius: 18,
+            gravity: 0.25,
+            lift: -5.5,
+            velocity: 0,
+            wingAngle: 0,
+            wingSpeed: 0.2,
+
+            draw: function() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Rotasi badan berdasarkan kecepatan jatuh
+                let rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, this.velocity * 0.08));
+                ctx.rotate(rotation);
+
+                // Badan Kelelawar (Hitam/Abu Gelap)
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Mata Merah
+                ctx.fillStyle = '#ff3333';
+                ctx.beginPath();
+                ctx.arc(-5, -5, 4, 0, Math.PI * 2);
+                ctx.arc(5, -5, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(-5, -5, 1.5, 0, Math.PI * 2);
+                ctx.arc(5, -5, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Telinga Lancip
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.moveTo(-12, -10);
+                ctx.lineTo(-18, -22);
+                ctx.lineTo(-6, -15);
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(12, -10);
+                ctx.lineTo(18, -22);
+                ctx.lineTo(6, -15);
+                ctx.fill();
+
+                // Sayap Bergerak (Animasi Flap)
+                let wingOffset = Math.sin(this.wingAngle) * 15;
+                ctx.fillStyle = '#333';
+                // Sayap Kiri
+                ctx.beginPath();
+                ctx.moveTo(-5, 0);
+                ctx.lineTo(-30, -15 + wingOffset);
+                ctx.lineTo(-15, 10);
+                ctx.fill();
+                // Sayap Kanan
+                ctx.beginPath();
+                ctx.moveTo(5, 0);
+                ctx.lineTo(30, -15 + wingOffset);
+                ctx.lineTo(15, 10);
+                ctx.fill();
+
+                ctx.restore();
+            },
+
+            update: function() {
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+                this.wingAngle += this.wingSpeed;
+
+                // Batasan atas & bawah layar
+                if (this.y + this.radius >= canvas.height - 40) {
+                    this.y = canvas.height - 40 - this.radius;
+                    triggerGameOver();
+                }
+                if (this.y - this.radius <= 0) {
+                    this.y = this.radius;
+                    this.velocity = 0;
+                }
+            },
+
+            flap: function() {
+                this.velocity = this.lift;
+                this.wingAngle = 0; // Reset animasi kepak
+            }
+        };
+
+        // Rintangan (Pilar Stalagmit / Stalaktit Goa)
+        let pipes = [];
+        const pipeWidth = 65;
+        const pipeGap = 160;
+        const pipeSpeed = 2.5;
+
+        function addPipe() {
+            let minHeight = 60;
+            let maxHeight = canvas.height - 180 - pipeGap;
+            let topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+
+            pipes.push({
+                x: canvas.width,
+                top: topHeight,
+                bottom: canvas.height - topHeight - pipeGap,
+                passed: false
+            });
+        }
+
+        function drawPipes() {
+            pipes.forEach(pipe => {
+                // Warna pilar ala batu gua
+                let gradientTop = ctx.createLinearGradient(pipe.x, 0, pipe.x + pipeWidth, 0);
+                gradientTop.addColorStop(0, '#3a506b');
+                gradientTop.addColorStop(1, '#1c2541');
+
+                // Pipa Atas (Stalaktit)
+                ctx.fillStyle = gradientTop;
+                ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+                // Ujung pipa atas
+                ctx.fillStyle = '#0b132b';
+                ctx.fillRect(pipe.x - 4, pipe.top - 15, pipeWidth + 8, 15);
+
+                // Pipa Bawah (Stalagmit)
+                ctx.fillStyle = gradientTop;
+                ctx.fillRect(pipe.x, canvas.height - pipe.bottom, pipeWidth, pipe.bottom);
+                // Ujung pipa bawah
+                ctx.fillStyle = '#0b132b';
+                ctx.fillRect(pipe.x - 4, canvas.height - pipe.bottom, pipeWidth + 8, 15);
+            });
+        }
+
+        function updatePipes() {
+            if (frames % 110 === 0) {
+                addPipe();
+            }
+
+            pipes.forEach((pipe, index) => {
+                pipe.x -= pipeSpeed;
+
+                // Cek Tabrakan (Collision Detection)
+                if (
+                    bat.x + bat.radius > pipe.x && 
+                    bat.x - bat.radius < pipe.x + pipeWidth && 
+                    (bat.y - bat.radius < pipe.top || bat.y + bat.radius > canvas.height - pipe.bottom)
+                ) {
+                    triggerGameOver();
+                }
+
+                // Tambah Skor saat melewati pipa
+                if (!pipe.passed && pipe.x + pipeWidth < bat.x) {
+                    score++;
+                    scoreBoard.innerText = score;
+                    pipe.passed = true;
+                }
+
+                // Hapus pipa yang sudah keluar layar
+                if (pipe.x + pipeWidth < 0) {
+                    pipes.splice(index, 1);
+                }
+            });
+        }
+
+        // Efek Latar Belakang (Bintang & Tanah)
+        function drawBackground() {
+            // Background langit malam digambar otomatis lewat CSS, kita tambah ornamen tanah goa di bawah
+            ctx.fillStyle = '#0b132b';
+            ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+
+            // Detail lantai bawah
+            ctx.fillStyle = '#1c2541';
+            for(let i = 0; i < canvas.width; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(i, canvas.height - 40);
+                ctx.lineTo(i + 10, canvas.height - 50);
+                ctx.lineTo(i + 20, canvas.height - 40);
+                ctx.fill();
+            }
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            finalScore.innerText = score;
+            gameOverScreen.classList.remove('hidden');
+            scoreBoard.style.display = 'none';
+        }
+
+        function resetGame() {
+            bat.y = 250;
+            bat.velocity = 0;
+            pipes = [];
+            score = 0;
+            frames = 0;
+            scoreBoard.innerText = score;
+            scoreBoard.style.display = 'block';
+            gameOverScreen.classList.add('hidden');
+            startScreen.classList.add('hidden');
+            gameState = 'PLAYING';
+            loop();
+        }
+
+        // Main Loop Game
+        function loop() {
+            if (gameState !== 'PLAYING') return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawBackground();
+            drawPipes();
+            updatePipes();
+            
+            bat.update();
+            bat.draw();
+
+            frames++;
+            requestAnimationFrame(loop);
+        }
+
+        // Kontrol Input (Keyboard, Mouse, Touch)
+        window.addEventListener('keydown', function(e) {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (gameState === 'PLAYING') {
+                    bat.flap();
+                } else if (gameState === 'START') {
+                    resetGame();
+                }
+            }
+        });
+
+        canvas.addEventListener('click', function() {
+            if (gameState === 'PLAYING') {
+                bat.flap();
+            }
+        });
+
+        startBtn.addEventListener('click', resetGame);
+        restartBtn.addEventListener('click', resetGame);
+    </script>
+</body>
+</html>
