@@ -1,33 +1,51 @@
+```html
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Petualangan Kelelawar Gua</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #1a1a1a;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: Arial, sans-serif;
-            color: white;
-            overflow: hidden;
-        }
-        #game-container {
-            text-align: center;
-            position: relative;
-        }
-        canvas {
-            border: 4px solid #444;
-            background-color: #0b0d1b;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Petualangan Kelelawar Gua</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background:
+        radial-gradient(circle at top, #25203a, #090910 70%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+    color: white;
+    overflow: hidden;
+}
+
+#game-container {
+    position: relative;
+}
+
+canvas {
+    width: 400px;
+    height: 600px;
+    border: 4px solid #51475f;
+    border-radius: 12px;
+    background: #0b0d1b;
+    box-shadow:
+        0 0 30px rgba(0,0,0,.9),
+        0 0 60px rgba(100,70,150,.15);
+    cursor: pointer;
+}
+
+</style>
 </head>
+
 <body>
 
 <div id="game-container">
@@ -35,206 +53,1183 @@
 </div>
 
 <script>
+
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Data Kelelawar
+
+// ======================================================
+// KELELAWAR
+// ======================================================
+
 const bat = {
-    x: 50,
+
+    x: 60,
     y: 300,
-    width: 30,
-    height: 20,
-    gravity: 0.35,
+
+    width: 32,
+    height: 22,
+
+    gravity: 0.36,
     lift: -7.5,
+
     velocity: 0,
-    wingAngle: 0
+
+    wingAngle: 0,
+    rotation: 0
+
 };
 
-// Data Game
+
+// ======================================================
+// GAME DATA
+// ======================================================
+
 let score = 0;
-let highScore = 0;
-let gameOver = false;
+
+let highScore =
+    Number(localStorage.getItem("batHighScore")) || 0;
+
+let level = 1;
+
 let gameStarted = false;
+
+let gameOver = false;
+
 let frameCount = 0;
 
-// Data Rintangan (Batu Gua)
-const obstacles = [];
-const obstacleWidth = 50;
-const obstacleGap = 160;
+let levelMessage = "";
 
-// Kontrol Pemain
-function flap() {
-    if (!gameStarted) {
-        gameStarted = true;
-    }
-    if (gameOver) {
-        resetGame();
-    } else {
-        bat.velocity = bat.lift;
-    }
+let levelMessageTimer = 0;
+
+
+// ======================================================
+// LEVEL SETTINGS
+// ======================================================
+
+let obstacleSpeed = 2.5;
+
+let obstacleGap = 165;
+
+let spawnInterval = 100;
+
+
+// ======================================================
+// OBSTACLES
+// ======================================================
+
+const obstacles = [];
+
+const obstacleWidth = 55;
+
+
+// ======================================================
+// BACKGROUND PARTICLES
+// ======================================================
+
+const particles = [];
+
+for (let i = 0; i < 40; i++) {
+
+    particles.push({
+
+        x: Math.random() * canvas.width,
+
+        y: Math.random() * canvas.height,
+
+        size: Math.random() * 2 + 1,
+
+        speed: Math.random() * 0.5 + 0.2
+
+    });
+
 }
 
-document.addEventListener("keydown", (e) => {
-    if (e.code === "Space") flap();
+
+// ======================================================
+// CONTROL
+// ======================================================
+
+function flap() {
+
+    if (!gameStarted) {
+
+        gameStarted = true;
+
+    }
+
+    if (gameOver) {
+
+        resetGame();
+
+        return;
+
+    }
+
+    bat.velocity = bat.lift;
+
+}
+
+
+document.addEventListener("keydown", function(e) {
+
+    if (e.code === "Space") {
+
+        e.preventDefault();
+
+        flap();
+
+    }
+
 });
-canvas.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    flap();
-});
+
+
 canvas.addEventListener("mousedown", flap);
 
+
+canvas.addEventListener("touchstart", function(e) {
+
+    e.preventDefault();
+
+    flap();
+
+}, { passive: false });
+
+
+// ======================================================
+// RESET
+// ======================================================
+
 function resetGame() {
+
     bat.y = 300;
+
     bat.velocity = 0;
+
+    bat.rotation = 0;
+
     obstacles.length = 0;
+
     score = 0;
+
+    level = 1;
+
+    frameCount = 0;
+
     gameOver = false;
+
     gameStarted = true;
+
+    obstacleSpeed = 2.5;
+
+    obstacleGap = 165;
+
+    spawnInterval = 100;
+
+    levelMessage = "";
+
+    levelMessageTimer = 0;
+
 }
 
-// Menambah Rintangan Baru
+
+// ======================================================
+// LEVEL SYSTEM
+// ======================================================
+
+function updateLevel() {
+
+    const newLevel =
+        Math.floor(score / 5) + 1;
+
+
+    if (newLevel > level) {
+
+        level = newLevel;
+
+
+        // Kecepatan bertambah
+        obstacleSpeed =
+            2.5 + ((level - 1) * 0.4);
+
+
+        // Celah mengecil
+        obstacleGap =
+            Math.max(
+                105,
+                165 - ((level - 1) * 8)
+            );
+
+
+        // Rintangan muncul lebih cepat
+        spawnInterval =
+            Math.max(
+                55,
+                100 - ((level - 1) * 5)
+            );
+
+
+        // Pesan
+        levelMessage =
+            "LEVEL " + level + "!";
+
+
+        levelMessageTimer = 120;
+
+    }
+
+}
+
+
+// ======================================================
+// SPAWN OBSTACLE
+// ======================================================
+
 function spawnObstacle() {
-    const minHeight = 50;
-    const maxHeight = canvas.height - obstacleGap - minHeight;
-    const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+
+    const minHeight = 60;
+
+    const maxHeight =
+        canvas.height -
+        obstacleGap -
+        minHeight;
+
+
+    const topHeight =
+        Math.floor(
+            Math.random() *
+            (maxHeight - minHeight + 1)
+        ) + minHeight;
+
 
     obstacles.push({
+
         x: canvas.width,
+
         top: topHeight,
-        bottom: canvas.height - topHeight - obstacleGap,
+
+        bottom:
+            canvas.height -
+            topHeight -
+            obstacleGap,
+
         passed: false
+
     });
+
 }
 
-// Pembaruan Logika Game
+
+// ======================================================
+// UPDATE
+// ======================================================
+
 function update() {
-    if (!gameStarted || gameOver) return;
+
+    if (!gameStarted || gameOver) {
+
+        return;
+
+    }
+
 
     frameCount++;
 
-    // Gerakan Kelelawar
+
+    // ==================================================
+    // BAT
+    // ==================================================
+
     bat.velocity += bat.gravity;
+
     bat.y += bat.velocity;
-    bat.wingAngle = Math.sin(frameCount * 0.2) * 10;
 
-    // Batas Layar
-    if (bat.y + bat.height >= canvas.height || bat.y <= 0) {
+
+    bat.wingAngle =
+        Math.sin(frameCount * 0.25) * 10;
+
+
+    bat.rotation =
+        Math.min(
+            Math.max(
+                bat.velocity * 0.04,
+                -0.4
+            ),
+            0.6
+        );
+
+
+    // ==================================================
+    // BATAS LAYAR
+    // ==================================================
+
+    if (
+        bat.y <= 0 ||
+        bat.y + bat.height >= canvas.height
+    ) {
+
         gameOver = true;
+
     }
 
-    // Kelola Rintangan
-    if (frameCount % 100 === 0) {
+
+    // ==================================================
+    // SPAWN
+    // ==================================================
+
+    if (
+        frameCount % spawnInterval === 0
+    ) {
+
         spawnObstacle();
+
     }
 
-    for (let i = obstacles.length - 1; i >= 0; i--) {
+
+    // ==================================================
+    // OBSTACLES
+    // ==================================================
+
+    for (
+        let i = obstacles.length - 1;
+        i >= 0;
+        i--
+    ) {
+
         const obs = obstacles[i];
-        obs.x -= 2.5;
 
-        // Cek Kolisi (Tabrakan)
+
+        obs.x -= obstacleSpeed;
+
+
+        // ==============================================
+        // COLLISION
+        // ==============================================
+
         if (
+
             bat.x < obs.x + obstacleWidth &&
+
             bat.x + bat.width > obs.x &&
-            (bat.y < obs.top || bat.y + bat.height > canvas.height - obs.bottom)
+
+            (
+
+                bat.y < obs.top ||
+
+                bat.y + bat.height >
+                canvas.height - obs.bottom
+
+            )
+
         ) {
+
             gameOver = true;
+
         }
 
-        // Tambah Skor
-        if (obs.x + obstacleWidth < bat.x && !obs.passed) {
+
+        // ==============================================
+        // SCORE
+        // ==============================================
+
+        if (
+
+            obs.x + obstacleWidth < bat.x &&
+
+            !obs.passed
+
+        ) {
+
             score++;
+
             obs.passed = true;
-            if (score > highScore) highScore = score;
+
+
+            // HIGH SCORE
+            if (score > highScore) {
+
+                highScore = score;
+
+                localStorage.setItem(
+                    "batHighScore",
+                    highScore
+                );
+
+            }
+
+
+            // LEVEL
+            updateLevel();
+
         }
 
-        // Hapus Rintangan di Luar Layar
-        if (obs.x + obstacleWidth < 0) {
+
+        // ==============================================
+        // REMOVE
+        // ==============================================
+
+        if (
+            obs.x + obstacleWidth < 0
+        ) {
+
             obstacles.splice(i, 1);
+
         }
+
     }
+
+
+    // ==================================================
+    // LEVEL MESSAGE
+    // ==================================================
+
+    if (levelMessageTimer > 0) {
+
+        levelMessageTimer--;
+
+    }
+
+
+    // ==================================================
+    // PARTICLES
+    // ==================================================
+
+    particles.forEach(p => {
+
+        p.x -= p.speed;
+
+        if (p.x < -10) {
+
+            p.x = canvas.width + 10;
+
+            p.y =
+                Math.random() *
+                canvas.height;
+
+        }
+
+    });
+
 }
 
-// Menggambar Visual Game
-function draw() {
-    // Latar Belakang Gua
-    ctx.fillStyle = "#0b0d1b";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Gambar Rintangan (Stalaktit & Stalagmit Gua)
-    ctx.fillStyle = "#3d354b";
-    for (const obs of obstacles) {
-        // Bagian Atas
-        ctx.fillRect(obs.x, 0, obstacleWidth, obs.top);
-        // Bagian Bawah
-        ctx.fillRect(obs.x, canvas.height - obs.bottom, obstacleWidth, obs.bottom);
+// ======================================================
+// DRAW BACKGROUND
+// ======================================================
+
+function drawBackground() {
+
+    const gradient =
+        ctx.createLinearGradient(
+            0,
+            0,
+            0,
+            canvas.height
+        );
+
+
+    gradient.addColorStop(
+        0,
+        "#090b18"
+    );
+
+    gradient.addColorStop(
+        0.5,
+        "#111329"
+    );
+
+    gradient.addColorStop(
+        1,
+        "#05050c"
+    );
+
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    // Partikel
+    particles.forEach(p => {
+
+        ctx.fillStyle =
+            "rgba(170,150,200,.35)";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            p.x,
+            p.y,
+            p.size,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+    });
+
+
+    // Gua bagian atas
+
+    ctx.fillStyle = "#171323";
+
+    ctx.beginPath();
+
+    ctx.moveTo(0, 0);
+
+    for (
+        let x = 0;
+        x <= canvas.width;
+        x += 30
+    ) {
+
+        const y =
+            25 +
+            Math.sin(x * 0.07) * 15;
+
+        ctx.lineTo(x, y);
+
     }
 
-    // Gambar Kelelawar
+    ctx.lineTo(
+        canvas.width,
+        0
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
+
+
+    // Gua bagian bawah
+
+    ctx.fillStyle = "#12101d";
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        0,
+        canvas.height
+    );
+
+    for (
+        let x = 0;
+        x <= canvas.width;
+        x += 30
+    ) {
+
+        const y =
+            canvas.height -
+            20 -
+            Math.sin(x * 0.08) * 15;
+
+        ctx.lineTo(x, y);
+
+    }
+
+    ctx.lineTo(
+        canvas.width,
+        canvas.height
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
+
+}
+
+
+// ======================================================
+// DRAW OBSTACLES
+// ======================================================
+
+function drawObstacles() {
+
+    for (const obs of obstacles) {
+
+
+        // ==============================================
+        // ATAS
+        // ==============================================
+
+        const topGradient =
+            ctx.createLinearGradient(
+                obs.x,
+                0,
+                obs.x + obstacleWidth,
+                0
+            );
+
+        topGradient.addColorStop(
+            0,
+            "#30293b"
+        );
+
+        topGradient.addColorStop(
+            1,
+            "#51435d"
+        );
+
+
+        ctx.fillStyle = topGradient;
+
+        ctx.fillRect(
+            obs.x,
+            0,
+            obstacleWidth,
+            obs.top
+        );
+
+
+        // ==============================================
+        // BAWAH
+        // ==============================================
+
+        ctx.fillStyle = "#3b3046";
+
+        ctx.fillRect(
+            obs.x,
+            canvas.height - obs.bottom,
+            obstacleWidth,
+            obs.bottom
+        );
+
+
+        // ==============================================
+        // STALAKTIT
+        // ==============================================
+
+        ctx.fillStyle = "#655570";
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            obs.x,
+            obs.top - 5
+        );
+
+        ctx.lineTo(
+            obs.x + obstacleWidth / 2,
+            obs.top + 25
+        );
+
+        ctx.lineTo(
+            obs.x + obstacleWidth,
+            obs.top - 5
+        );
+
+        ctx.closePath();
+
+        ctx.fill();
+
+
+        // ==============================================
+        // STALAGMIT
+        // ==============================================
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            obs.x,
+            canvas.height -
+            obs.bottom +
+            5
+        );
+
+        ctx.lineTo(
+            obs.x + obstacleWidth / 2,
+            canvas.height -
+            obs.bottom -
+            25
+        );
+
+        ctx.lineTo(
+            obs.x + obstacleWidth,
+            canvas.height -
+            obs.bottom +
+            5
+        );
+
+        ctx.closePath();
+
+        ctx.fill();
+
+    }
+
+}
+
+
+// ======================================================
+// DRAW BAT
+// ======================================================
+
+function drawBat() {
+
     ctx.save();
-    ctx.translate(bat.x + bat.width / 2, bat.y + bat.height / 2);
-    
-    // Badan
-    ctx.fillStyle = "#8b7d93";
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 10, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
 
-    // Kepala & Telinga
-    ctx.fillStyle = "#63566c";
-    ctx.beginPath();
-    ctx.arc(6, -4, 5, 0, Math.PI * 2);
-    ctx.fill();
 
-    // Sayap (Animasi mengepak)
-    ctx.fillStyle = "#4a3b53";
-    ctx.beginPath();
-    ctx.moveTo(-2, 0);
-    ctx.lineTo(-12, -12 + bat.wingAngle);
-    ctx.lineTo(-4, 4);
-    ctx.fill();
+    ctx.translate(
+        bat.x + bat.width / 2,
+        bat.y + bat.height / 2
+    );
+
+
+    ctx.rotate(bat.rotation);
+
+
+    // ==============================================
+    // BAYANGAN
+    // ==============================================
+
+    ctx.fillStyle =
+        "rgba(0,0,0,.3)";
 
     ctx.beginPath();
-    ctx.moveTo(2, 0);
-    ctx.lineTo(12, -12 + bat.wingAngle);
-    ctx.lineTo(4, 4);
+
+    ctx.ellipse(
+        0,
+        8,
+        15,
+        5,
+        0,
+        0,
+        Math.PI * 2
+    );
+
     ctx.fill();
+
+
+    // ==============================================
+    // SAYAP KIRI
+    // ==============================================
+
+    ctx.fillStyle = "#44354f";
+
+    ctx.beginPath();
+
+    ctx.moveTo(-4, 0);
+
+    ctx.quadraticCurveTo(
+        -14,
+        -15 + bat.wingAngle,
+        -22,
+        -7
+    );
+
+    ctx.quadraticCurveTo(
+        -14,
+        2,
+        -5,
+        7
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
+
+
+    // ==============================================
+    // SAYAP KANAN
+    // ==============================================
+
+    ctx.beginPath();
+
+    ctx.moveTo(4, 0);
+
+    ctx.quadraticCurveTo(
+        14,
+        -15 + bat.wingAngle,
+        22,
+        -7
+    );
+
+    ctx.quadraticCurveTo(
+        14,
+        2,
+        5,
+        7
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
+
+
+    // ==============================================
+    // BADAN
+    // ==============================================
+
+    ctx.fillStyle = "#95869d";
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        0,
+        1,
+        10,
+        8,
+        0,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+
+    // ==============================================
+    // KEPALA
+    // ==============================================
+
+    ctx.fillStyle = "#76657d";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        7,
+        -4,
+        6,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+
+    // ==============================================
+    // TELINGA
+    // ==============================================
+
+    ctx.beginPath();
+
+    ctx.moveTo(3, -7);
+
+    ctx.lineTo(3, -15);
+
+    ctx.lineTo(8, -8);
+
+    ctx.fill();
+
+
+    ctx.beginPath();
+
+    ctx.moveTo(8, -8);
+
+    ctx.lineTo(13, -15);
+
+    ctx.lineTo(13, -5);
+
+    ctx.fill();
+
+
+    // ==============================================
+    // MATA
+    // ==============================================
+
+    ctx.fillStyle = "#ff4d6d";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        9,
+        -5,
+        1.5,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
 
     ctx.restore();
 
-    // Tampilan Skor
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "20px Arial";
-    ctx.fillText(`Skor: ${score}`, 10, 30);
-    ctx.fillText(`Skor Tertinggi: ${highScore}`, 10, 60);
+}
 
-    // Pesan Mulai / Game Over
-    if (!gameStarted) {
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "22px Arial";
+
+// ======================================================
+// DRAW UI
+// ======================================================
+
+function drawUI() {
+
+    // Panel
+    ctx.fillStyle =
+        "rgba(0,0,0,.35)";
+
+    ctx.fillRect(
+        8,
+        8,
+        190,
+        105
+    );
+
+
+    ctx.fillStyle = "#ffffff";
+
+    ctx.font = "bold 20px Arial";
+
+    ctx.fillText(
+        "SCORE : " + score,
+        18,
+        34
+    );
+
+
+    ctx.fillStyle = "#ffd166";
+
+    ctx.fillText(
+        "LEVEL : " + level,
+        18,
+        62
+    );
+
+
+    ctx.fillStyle = "#a8dadc";
+
+    ctx.font = "16px Arial";
+
+    ctx.fillText(
+        "BEST : " + highScore,
+        18,
+        88
+    );
+
+
+    // ==============================================
+    // LEVEL UP
+    // ==============================================
+
+    if (levelMessageTimer > 0) {
+
+        ctx.save();
+
         ctx.textAlign = "center";
-        ctx.fillText("Tekan SPASI / Klik untuk Terbang", canvas.width / 2, canvas.height / 2);
-    } else if (gameOver) {
-        ctx.fillStyle = "#ff5555";
-        ctx.font = "30px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
+
+        ctx.globalAlpha =
+            levelMessageTimer / 120;
+
+        ctx.fillStyle = "#ffd166";
+
+        ctx.font =
+            "bold 42px Arial";
+
+        ctx.fillText(
+            levelMessage,
+            canvas.width / 2,
+            160
+        );
+
+        ctx.font =
+            "18px Arial";
+
         ctx.fillStyle = "#ffffff";
-        ctx.font = "18px Arial";
-        ctx.fillText("Tekan SPASI / Klik untuk Main Lagi", canvas.width / 2, canvas.height / 2 + 20);
+
+        ctx.fillText(
+            "Rintangan semakin sulit!",
+            canvas.width / 2,
+            190
+        );
+
+        ctx.restore();
+
     }
 
-    ctx.textAlign = "left";
+
+    // ==============================================
+    // START SCREEN
+    // ==============================================
+
+    if (!gameStarted) {
+
+        ctx.fillStyle =
+            "rgba(0,0,0,.65)";
+
+        ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+
+        ctx.textAlign = "center";
+
+
+        ctx.fillStyle = "#d8c8e8";
+
+        ctx.font =
+            "bold 32px Arial";
+
+        ctx.fillText(
+            "PETUALANGAN",
+            canvas.width / 2,
+            210
+        );
+
+
+        ctx.fillStyle = "#ffffff";
+
+        ctx.font =
+            "bold 38px Arial";
+
+        ctx.fillText(
+            "KELELAWAR",
+            canvas.width / 2,
+            255
+        );
+
+
+        ctx.fillStyle = "#ffd166";
+
+        ctx.font =
+            "20px Arial";
+
+        ctx.fillText(
+            "Tekan SPASI / KLIK",
+            canvas.width / 2,
+            320
+        );
+
+
+        ctx.fillStyle = "#aaa";
+
+        ctx.font =
+            "15px Arial";
+
+        ctx.fillText(
+            "Lewati batu dan raih score tertinggi!",
+            canvas.width / 2,
+            350
+        );
+
+
+        ctx.textAlign = "left";
+
+    }
+
+
+    // ==============================================
+    // GAME OVER
+    // ==============================================
+
+    if (gameOver) {
+
+        ctx.fillStyle =
+            "rgba(0,0,0,.7)";
+
+        ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+
+        ctx.textAlign = "center";
+
+
+        ctx.fillStyle = "#ff4d6d";
+
+        ctx.font =
+            "bold 42px Arial";
+
+        ctx.fillText(
+            "GAME OVER",
+            canvas.width / 2,
+            230
+        );
+
+
+        ctx.fillStyle = "#ffffff";
+
+        ctx.font =
+            "20px Arial";
+
+        ctx.fillText(
+            "Score : " + score,
+            canvas.width / 2,
+            275
+        );
+
+
+        ctx.fillStyle = "#ffd166";
+
+        ctx.fillText(
+            "Level : " + level,
+            canvas.width / 2,
+            305
+        );
+
+
+        ctx.fillStyle = "#a8dadc";
+
+        ctx.fillText(
+            "Best : " + highScore,
+            canvas.width / 2,
+            335
+        );
+
+
+        ctx.fillStyle = "#ffffff";
+
+        ctx.font =
+            "17px Arial";
+
+        ctx.fillText(
+            "SPASI / KLIK untuk bermain lagi",
+            canvas.width / 2,
+            390
+        );
+
+
+        ctx.textAlign = "left";
+
+    }
+
 }
 
-// Loop Utama Game
-function gameLoop() {
-    update();
-    draw();
-    requestAnimationFrame(gameLoop);
+
+// ======================================================
+// MAIN DRAW
+// ======================================================
+
+function draw() {
+
+    drawBackground();
+
+    drawObstacles();
+
+    drawBat();
+
+    drawUI();
+
 }
+
+
+// ======================================================
+// GAME LOOP
+// ======================================================
+
+function gameLoop() {
+
+    update();
+
+    draw();
+
+    requestAnimationFrame(gameLoop);
+
+}
+
 
 gameLoop();
+
 </script>
 
 </body>
 </html>
+```
